@@ -3,17 +3,17 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Maze Race — You vs AI (Improved UI + Coin Effect)</title>
+  <title>Maze Race — You vs AI (Improved UI + Pac-Man Design)</title>
   <style>
     /* New Color Palette and improved UI styles */
     :root{
       --bg: #1c1c3a; /* Dark background */
       --wall: #4f5d75; /* Slate/Blue for walls */
-      --path: #f0f0f0; /* Light path/canvas background */
-      --player: #ffd166; /* Gold/Yellow for player */
-      --ai: #ff6b6b; /* Coral/Red for AI */
+      --path: #f0f0f0; /* Light path/canvas background (Pac-Man arena color) */
+      --player: #ffd166; /* Pac-Man Yellow */
+      --ai: #ff6b6b; /* Ghost Coral Red */
       --goal: #60d394; /* Mint Green for goal */
-      --coin: #f705ff; /* Yellow for coin */
+      --coin: #f705ff; /* Coin/Pellet Yellow */
       --text-main: #e0e0e0;
       --panel-bg: #2e3549; /* Darker panel background */
       --button-bg: #4a5568;
@@ -22,38 +22,61 @@
 
     * {
       user-select: none;
-      }
+      box-sizing: border-box; 
+    }
     body{
       margin: 0;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 20px;
+      gap: 10px; 
       background: var(--bg);
       color: var(--text-main);
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      min-height: 100vh; 
+      padding: 10px 0; 
+      overflow-y: auto; 
     }
     h1{
       font-size: 24px;
-      margin: 20px 0 10px 0;
+      margin: 0; 
+      padding-top: 10px;
       color: var(--path);
       text-shadow: 0 2px 4px rgba(0,0,0,0.5);
     }
     #game-wrap{
       display: flex;
-      gap: 30px;
-      align-items: flex-start;
+      gap: 20px; 
+      align-items: center; 
       max-width: 1200px;
-      padding: 20px;
+      width: 95%; 
+      flex-grow: 1; 
+      padding: 0;
+      flex-wrap: wrap; 
+      justify-content: center;
+    }
+    
+    #canvas-container {
+      width: 90vmin;
+      height: 90vmin; 
+      max-width: 720px; 
+      max-height: 720px;
+      position: relative; 
+      flex-shrink: 0; 
     }
     canvas{
+      width: 100%;
+      height: 100%; 
+      display: block;
       background: var(--path);
       border-radius: 12px;
       box-shadow: 0 10px 30px rgba(0,0,0,.8), 0 0 0 4px var(--wall);
       transition: box-shadow 0.3s;
     }
+
     .panel{
       max-width: 320px;
+      width: 100%;
       padding: 20px;
       background: var(--panel-bg);
       border-radius: 12px;
@@ -123,7 +146,8 @@
       gap: 8px;
       font-size: 13px;
     }
-    .swatch{
+    /* We keep the swatch as a circle for simplicity in the legend */
+    .swatch{ 
       width: 16px;
       height: 16px;
       border-radius: 50%;
@@ -132,8 +156,24 @@
     footer{
       font-size: 12px;
       opacity: .7;
-      margin-top: 20px;
+      margin-top: 10px; 
       text-align: center;
+    }
+
+    @media (max-width: 1050px) {
+      #game-wrap {
+        flex-direction: column; 
+        align-items: center; 
+      }
+      #canvas-container {
+        width: 90vw; 
+        height: 90vw;
+        max-height: unset; 
+        max-width: unset;
+      }
+      .panel {
+        max-width: 90vw;
+      }
     }
   </style>
 </head>
@@ -141,7 +181,9 @@
   <h1>✨ Maze Race — You vs AI </h1>
 
   <div id="game-wrap">
-    <canvas id="maze" width="720" height="720"></canvas>
+    <div id="canvas-container">
+      <canvas id="maze" width="720" height="720"></canvas>
+    </div>
 
     <div class="panel">
       <div class="panel-group">
@@ -159,8 +201,8 @@
       <div class="controls">Controls: **Arrow keys / WASD**</div>
 
       <div class="legend">
-        <span><div class="swatch" style="background:var(--player)"></div>You</span>
-        <span><div class="swatch" style="background:var(--ai)"></div>AI</span>
+        <span><div class="swatch" style="background:var(--player)"></div>Player (Pac-Man)</span>
+        <span><div class="swatch" style="background:var(--ai)"></div>AI (Ghost)</span>
         <span><div class="swatch" style="background:var(--goal); border-radius:4px;"></div>Goal</span>
         <span><div class="swatch" style="background:var(--coin)"></div>Coin</span>
       </div>
@@ -184,7 +226,7 @@
   // === UI elements ===
   const aiDelayEl = document.getElementById('aiDelay');
   const userMovesEl = document.getElementById('userMoves');
-  const coinsCollectedEl = document.getElementById('coinsCollected'); // New element
+  const coinsCollectedEl = document.getElementById('coinsCollected');
   const aiStateEl = document.getElementById('aiState');
   const regenBtn = document.getElementById('regen');
   const resetBtn = document.getElementById('reset');
@@ -195,21 +237,22 @@
   let horizontalWalls = [];
 
   // === Players ===
-  let player = {x:0,y:0};
+  // player.dir stores the angle in radians: 0=Right, PI/2=Down, PI=Left, 3PI/2=Up
+  let player = {x:0,y:0, dir: 0}; 
   let ai = {x:0,y:1};
   const goal = {x:cols-1,y:rows-1};
 
   // === Coins ===
   let coins = [];
   const coinCount = 12;
-  let collectedCoins = 0; // New coin counter
+  let collectedCoins = 0;
 
   // === AI timing ===
   let initialAIDelaySec = 60;
   let aiDelaySec = initialAIDelaySec;
   const minAIDelaySec = 0.15;
-  const movePenaltySec = 1.0; // Penalty for *any* player move
-  const coinBonusSec = 0.2; // Bonus for collecting a coin (new)
+  const movePenaltySec = 1.0;
+  const coinBonusSec = 0.2;
   let userMoves = 0;
 
   let aiTimer = null;
@@ -217,7 +260,7 @@
 
   function idx(x,y){return y*cols + x}
 
-  // ===== Maze generator (No change to logic) =====
+  // ===== Maze generator (unchanged) =====
   function generateMaze(){
     grid = new Array(cols*rows).fill(0);
     verticalWalls = new Array(rows*(cols-1)).fill(true);
@@ -253,7 +296,6 @@
       }
     }
 
-    // ===== Place coins (No change to logic) =====
     coins = [];
     for (let i = 0; i < coinCount; i++) {
       while (true) {
@@ -270,7 +312,7 @@
     }
   }
 
-  // ==== Walls (No change to logic) ====
+  // ==== Walls (unchanged) ====
   function hasWallBetween(x1,y1,x2,y2){
     if(x1===x2){
       const minY = Math.min(y1,y2);
@@ -283,7 +325,7 @@
     return true;
   }
 
-  // ===== Draw (Minor cosmetic changes) =====
+  // ===== Draw (FIXED Pac-Man Drawing Logic) =====
   function draw(){
     ctx.clearRect(0,0,w,h);
 
@@ -291,9 +333,9 @@
     ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--path');
     ctx.fillRect(0,0,w,h);
 
-    // vertical walls
+    // walls (unchanged)
     ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--wall');
-    ctx.lineWidth = 4; // Thicker walls for better contrast
+    ctx.lineWidth = 4; 
     for(let y=0;y<rows;y++){
       for(let x=0;x<cols-1;x++){
         if(verticalWalls[y*(cols-1)+x]){
@@ -305,8 +347,6 @@
         }
       }
     }
-
-    // horizontal walls
     for(let x=0;x<cols;x++){
       for(let y=0;y<rows-1;y++){
         if(horizontalWalls[x*(rows-1)+y]){
@@ -327,30 +367,120 @@
     ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--coin');
     coins.forEach(c => {
       ctx.beginPath();
-      // Draw a small circle
+      // Draw a small circle (pellet)
       ctx.arc(
         c.x*cellW + cellW/2,
         c.y*cellH + cellH/2,
-        Math.min(cellW,cellH)*0.22, // Slightly larger coin
+        Math.min(cellW,cellH)*0.22, 
         0, Math.PI*2
       );
       ctx.fill();
     });
 
-    // player (circle)
+    // -----------------------------------------------------------------
+    // Player (Pac-Man) Drawing Logic - FIXED
+    // -----------------------------------------------------------------
     ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--player');
+    const radius = Math.min(cellW,cellH)*0.35;
+    const centerX = player.x*cellW + cellW/2;
+    const centerY = player.y*cellH + cellH/2;
+    
+    // Use the stored direction angle directly
+    const angle = player.dir; 
+    
+    // Pac-Man mouth angle: 30 degrees open (PI/6 radians)
+    const mouthAngle = Math.PI / 6; 
+    
+    // Arc starts at the top edge of the mouth
+    let startAngle = angle + mouthAngle; 
+    // Arc ends at the bottom edge of the mouth
+    let endAngle = angle - mouthAngle;
+
     ctx.beginPath();
-    ctx.arc(player.x*cellW + cellW/2, player.y*cellH + cellH/2, Math.min(cellW,cellH)*0.35, 0, Math.PI*2); // Larger player
+    // Move to center to create the mouth point
+    ctx.moveTo(centerX, centerY); 
+    // Draw the Pac-Man body Clockwise (false) to leave the mouth gap facing 'angle'
+    ctx.arc(
+        centerX, 
+        centerY, 
+        radius, 
+        startAngle, 
+        endAngle, 
+        false // FALSE for clockwise (This is the fix)
+    );
+    ctx.closePath();
     ctx.fill();
 
-    // AI (circle)
+    // -----------------------------------------------------------------
+    // AI (Ghost) Drawing Logic (unchanged)
+    // -----------------------------------------------------------------
     ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--ai');
+    const ghostRadius = Math.min(cellW,cellH)*0.35;
+    const ghostX = ai.x*cellW + cellW/2;
+    const ghostY = ai.y*cellH + cellH/2;
+    
+    const baseCenterY = ghostY - ghostRadius * 0.1;
+    
     ctx.beginPath();
-    ctx.arc(ai.x*cellW + cellW/2, ai.y*cellH + cellH/2, Math.min(cellW,cellH)*0.35, 0, Math.PI*2); // Larger AI
+    
+    // 1. Draw the rounded top (semicircle)
+    ctx.arc(
+        ghostX, 
+        baseCenterY, 
+        ghostRadius, 
+        Math.PI, 
+        0,       
+        false
+    );
+    
+    // 2. Draw the scalloped bottom
+    const baseW = ghostRadius * 2;
+    const numScallops = 4;
+    
+    for (let i = 0; i <= numScallops; i++) {
+        const xPos = ghostX - ghostRadius + (baseW / numScallops) * i;
+        if (i % 2 === 0) {
+            // Down point
+            ctx.lineTo(xPos, baseCenterY + ghostRadius * 0.6); 
+        } else {
+            // Up point
+            ctx.lineTo(xPos, baseCenterY); // Line back up to the base line
+        }
+    }
+    
+    ctx.closePath();
+    ctx.fill();
+    
+    // Ghost Eyes
+    const eyeRadius = ghostRadius * 0.2;
+    const pupilRadius = ghostRadius * 0.1;
+    const eyeY = baseCenterY - ghostRadius * 0.4;
+    
+    // Eye 1 (White)
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(ghostX - ghostRadius * 0.35, eyeY, eyeRadius, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Eye 2 (White)
+    ctx.beginPath();
+    ctx.arc(ghostX + ghostRadius * 0.35, eyeY, eyeRadius, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Pupils (Black) - Simple fixed direction for now
+    ctx.fillStyle = '#000';
+    // Pupil 1
+    ctx.beginPath();
+    ctx.arc(ghostX - ghostRadius * 0.35, eyeY, pupilRadius, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Pupil 2
+    ctx.beginPath();
+    ctx.arc(ghostX + ghostRadius * 0.35, eyeY, pupilRadius, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  // ===== A* and MinHeap (No change to logic) =====
+  // ===== A* and MinHeap (unchanged) =====
   function neighbors(x,y){
     const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
     const out = [];
@@ -432,20 +562,21 @@
     }
   }
 
-  // ==== AI movement (No change to logic, just text update) ====
+  // ==== AI movement (unchanged) ====
   function scheduleAIMove(){
     if(aiTimer){clearTimeout(aiTimer); aiTimer=null;}
 
     if(ai.x===goal.x && ai.y===goal.y){
-      aiStateEl.textContent = "AI reached goal — AI wins!";
+      aiStateEl.textContent = "AI reached goal — AI wins! 🤖";
       return;
     }
     if(player.x===goal.x && player.y===goal.y){
-      aiStateEl.textContent = "Player reached goal — You win!";
+      aiStateEl.textContent = "Player reached goal — You win! 🎉";
       return;
     }
 
     const delayMs = Math.max(minAIDelaySec*1000, aiDelaySec*1000);
+    aiDelayEl.textContent = (delayMs/1000).toFixed(2);
     aiStateEl.textContent = `next move in ${ (delayMs/1000).toFixed(2) }s`;
 
     aiTimer = setTimeout(()=>{
@@ -466,7 +597,7 @@
         draw();
 
         if(ai.x===goal.x && ai.y===goal.y){
-          aiStateEl.textContent="AI reached goal — AI wins!";
+          aiStateEl.textContent="AI reached goal — AI wins! 🤖";
           return;
         }
 
@@ -475,7 +606,7 @@
     }, delayMs);
   }
 
-  // ===== Player move (UPDATED coin collection logic) =====
+  // ===== Player move (unchanged) =====
   function tryMovePlayer(dx,dy){
     const nx = player.x+dx, ny = player.y+dy;
     if(nx<0 || nx>=cols || ny<0 || ny>=rows) return;
@@ -484,23 +615,24 @@
     player.x=nx; player.y=ny;
     userMoves++;
     userMovesEl.textContent = userMoves;
+    
+    // Set player direction (in radians) for drawing the Pac-Man mouth
+    if (dx === 1) player.dir = 0; // Right (0 radians)
+    else if (dx === -1) player.dir = Math.PI; // Left (PI radians)
+    else if (dy === -1) player.dir = 3 * Math.PI / 2; // Up (270 degrees)
+    else if (dy === 1) player.dir = Math.PI / 2; // Down (90 degrees)
 
     // Standard player move penalty (slows AI)
     aiDelaySec = Math.max(minAIDelaySec, aiDelaySec - movePenaltySec);
 
-    // ===== coin collection (UPDATED logic) =====
-    let coinCollectedThisTurn = false;
+    // ===== coin collection (unchanged) =====
     for(let i=coins.length-1;i>=0;i--){
       if(coins[i].x===player.x && coins[i].y===player.y){
         coins.splice(i,1);
         collectedCoins++;
-        coinCollectedThisTurn = true;
-        
-        // **NEW LOGIC: Decrease AI delay by coinBonusSec (0.1s)**
         aiDelaySec = Math.max(minAIDelaySec, aiDelaySec + coinBonusSec);
-        
         coinsCollectedEl.textContent = collectedCoins;
-        break; // Only one coin per cell
+        break; 
       }
     }
 
@@ -514,12 +646,11 @@
       return;
     }
 
-    // After a move, clear the old timer and schedule the next AI move
     if(aiTimer) clearTimeout(aiTimer);
     scheduleAIMove();
   }
 
-  // === Keyboard (No change to logic) ===
+  // === Keyboard (unchanged) ===
   window.addEventListener('keydown', (e)=>{
     const k=e.key;
     if(["ArrowUp","w","W"].includes(k)) tryMovePlayer(0,-1);
@@ -528,15 +659,14 @@
     else if(["ArrowRight","d","D"].includes(k)) tryMovePlayer(1,0);
   });
 
-  // ==== Reset (UPDATED to include coin reset) ====
+  // ==== Reset (unchanged) ====
   function resetPositions(){
-    player={x:0,y:0};
+    player={x:0,y:0, dir: 0}; 
     ai={x:0,y:1};
     userMoves=0;
-    collectedCoins=0; // Reset collected coins
+    collectedCoins=0; 
     aiDelaySec=initialAIDelaySec;
     
-    // Update UI elements
     aiDelayEl.textContent=aiDelaySec.toFixed(2);
     userMovesEl.textContent=userMoves;
     coinsCollectedEl.textContent=collectedCoins;
