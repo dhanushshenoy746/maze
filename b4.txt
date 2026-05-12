@@ -1,0 +1,65 @@
+import java.rmi.*;
+public interface ISimpleInterest extends Remote{
+    double ComputeInterest(double p,double t,double r)throws RemoteException;
+}
+
+
+import java.rmi.*;
+import java.rmi.registry.*;
+public class SIClient{
+    public static void main(String[] args)throws RemoteException,NotBoundException{
+            if (args.length != 3) {
+                System.out.println("Use Case: java SIClient 2000 2 10");
+                
+                return;
+            }
+            double p=Double.parseDouble(args[0]);
+            double t=Double.parseDouble(args[1]);
+            double r=Double.parseDouble(args[2]);
+            Registry reg=LocateRegistry.getRegistry(18888);
+            ISimpleInterest s=(ISimpleInterest)reg.lookup("Simple Interest");
+            double si=s.ComputeInterest(p, t, r);
+            
+
+       
+            System.out.println("Simple Interest Calculation:");
+            System.out.println("Principal:"+p);
+            System.out.println("Time:"+t);
+            System.out.println("Rate:"+r);
+            System.out.println("Simple Interest:"+si);
+        
+    }
+}
+
+
+import java.rmi.RemoteException;
+import java.rmi.server.UnicastRemoteObject;
+public class SIServer extends UnicastRemoteObject implements ISimpleInterest{
+    protected SIServer()throws RemoteException{
+        super();
+    } 
+    @Override
+    public double ComputeInterest(double p, double t,double r)throws RemoteException{
+        return (p*t*r)/100;
+    }
+}
+
+
+
+
+import java.rmi.AlreadyBoundException;
+import java.rmi.RemoteException;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
+public class StartServer{
+    public static void main(String[] args)throws RemoteException,AlreadyBoundException {
+        try{
+            SIServer si=new SIServer();
+            Registry reg=LocateRegistry.createRegistry(18888);
+            reg.bind("Simple Interest", si);
+            System.out.println("Server Is Started");
+        }catch(Exception e){
+            System.out.println("Server Exception:"+e.getMessage());
+        }
+    }
+}
